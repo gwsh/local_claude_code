@@ -1,0 +1,87 @@
+name: Check Upstream Updates
+
+on:
+  schedule:
+    # Run daily at 8:00 UTC (4:00 PM Beijing)
+    - cron: '0 8 * * *'
+  workflow_dispatch:
+
+jobs:
+  check-upstream:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch upstream repositories
+        run: |
+          git remote add upstream-code https://github.com/anthropics/claude-code.git || true
+          git remote add upstream-free https://github.com/paoloanzn/free-code.git || true
+          git fetch upstream-code 2>/dev/null || echo "upstream-code fetch failed"
+          git fetch upstream-free 2>/dev/null || echo "upstream-free fetch failed"
+
+      - name: Check for new commits and create issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Check commits from the last 2 days (overlap to avoid missing due to timing)
+          SINCE="2 days ago"
+
+          check_upstream() {
+            local REMOTE=$1
+            local REPO=$2
+            local BRANCH="${REMOTE}/main"
+
+            if ! git rev-parse --verify "${BRANCH}" >/dev/null 2>&1; then
+              echo "${REPO}: branch not found, skipping"
+              return
+            fi
+
+            COMMITS=$(git log --oneline "${BRANCH}" --since="${SINCE}" 2>/dev/null || echo "")
+            COUNT=$(echo "$COMMITS" | grep -c . || echo 0)
+
+            if [ "$COUNT" -gt 0 ] && [ -n "$COMMITS" ]; then
+              echo "Found ${COUNT} new commit(s) from ${REPO}"
+
+              BODY="## Upstream updates detected: [${REPO}](https://github.com/${REPO})
+
+          **${COUNT} new commit(s)** since ${SINCE}:
+
+          \`\`\`
+          ${COMMITS}
+          \`\`\`
+
+          **Compare:** https://github.com/${REPO}/commits/main
+
+          > Automated check via \`.github/workflows/check-upstream.yml\`"
+
+              # Check if a similar issue already exists
+              EXISTING=$(gh issue list --repo "$GITHUB_REPOSITORY" \
+                --search "Upstream update: ${REPO}" \
+                --state open \
+                --json number \
+                --jq '.[0].number' 2>/dev/null || echo "")
+
+              if [ -n "$EXISTING" ]; then
+                echo "Issue #${EXISTING} already open, adding comment..."
+                gh issue comment "$EXISTING" --repo "$GITHUB_REPOSITORY" \
+                  --body "Still behind ${REPO}. Latest commits:\n\n\`\`\`\n${COMMITS}\n\`\`\`"
+              else
+                TITLE="Upstream update: ${REPO} — ${COUNT} new commit(s)"
+                gh issue create --repo "$GITHUB_REPOSITORY" \
+                  --title "$TITLE" \
+                  --body "$BODY" \
+                  --label "upstream"
+                echo "Issue created."
+              fi
+            else
+              echo "${REPO}: no new commits since ${SINCE}"
+            fi
+          }
+
+          check_upstream "upstream-code" "anthropics/claude-code"
+          check_upstream "upstream-free" "paoloanzn/free-code"

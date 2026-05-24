@@ -1,5 +1,5 @@
 import { randomUUID, type UUID } from 'crypto'
-import { mkdir, readFile, writeFile } from 'fs/promises'
+import { mkdir, readFile, stat, writeFile } from 'fs/promises'
 import { getOriginalCwd, getSessionId } from '../../bootstrap/state.js'
 import type { LocalJSXCommandContext } from '../../commands.js'
 import { logEvent } from '../../services/analytics/index.js'
@@ -17,6 +17,7 @@ import {
   getTranscriptPath,
   getTranscriptPathForSession,
   isTranscriptMessage,
+  MAX_TRANSCRIPT_READ_BYTES,
   saveCustomTitle,
   searchSessionsByCustomTitle,
 } from '../../utils/sessionStorage.js'
@@ -74,11 +75,21 @@ async function createFork(customTitle?: string): Promise<{
   // Ensure project directory exists
   await mkdir(projectDir, { recursive: true, mode: 0o700 })
 
-  // Read current transcript file
+  // Read current transcript file (with size guard to prevent OOM)
   let transcriptContent: Buffer
   try {
+    const { size } = await stat(currentTranscriptPath)
+    if (size > MAX_TRANSCRIPT_READ_BYTES) {
+      const sizeMB = (size / (1024 * 1024)).toFixed(1)
+      const limitMB = (MAX_TRANSCRIPT_READ_BYTES / (1024 * 1024)).toFixed(0)
+      throw new Error(
+        `Transcript file is too large to branch (${sizeMB}MB, limit: ${limitMB}MB). ` +
+          `Use /clear to start a fresh session first.`,
+      )
+    }
     transcriptContent = await readFile(currentTranscriptPath)
-  } catch {
+  } catch (e) {
+    if (e instanceof Error && e.message.includes('too large to branch')) throw e
     throw new Error('No conversation to branch')
   }
 
