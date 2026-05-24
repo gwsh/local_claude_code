@@ -2,8 +2,22 @@ import { feature } from 'bun:bundle';
 
 // Define MACRO global for development (normally injected by bun build --define)
 if (typeof MACRO === 'undefined') {
+  let devVersion = '0.0.0-dev'
+  try {
+    const proc = Bun.spawnSync({
+      cmd: ['git', 'describe', '--tags', '--abbrev=0'],
+      stdout: 'pipe',
+      stderr: 'pipe',
+    })
+    if (proc.exitCode === 0) {
+      const tag = new TextDecoder().decode(proc.stdout).trim()
+      devVersion = (tag.startsWith('v') ? tag.slice(1) : tag) + '-dev'
+    }
+  } catch {
+    // ignore, use default
+  }
   (globalThis as any).MACRO = {
-    VERSION: '2.1.87-dev',
+    VERSION: devVersion,
     BUILD_TIME: new Date().toISOString(),
     PACKAGE_URL: 'claude-code-source-snapshot',
     FEEDBACK_CHANNEL: 'github',

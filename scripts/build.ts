@@ -76,6 +76,13 @@ function runCommandInherit(cmd: string[]): number {
   return proc.exitCode ?? 1
 }
 
+function getGitVersion(): string | null {
+  const tag = runCommand(['git', 'describe', '--tags', '--abbrev=0'])
+  if (!tag) return null
+  // Strip leading 'v' if present (e.g. "v2.1.151" → "2.1.151")
+  return tag.startsWith('v') ? tag.slice(1) : tag
+}
+
 function getDevVersion(baseVersion: string): string {
   const timestamp = new Date().toISOString()
   const date = timestamp.slice(0, 10).replaceAll('-', '')
@@ -152,7 +159,9 @@ const outfile = compile
 const binaryPath = isWindows ? `${outfile}.exe` : outfile
 
 const buildTime = new Date().toISOString()
-const version = dev ? getDevVersion(pkg.version) : pkg.version
+const gitVersion = getGitVersion()
+const baseVersion = gitVersion ?? pkg.version
+const version = dev ? getDevVersion(baseVersion) : baseVersion
 
 // ─── Build step ───
 
