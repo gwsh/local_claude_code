@@ -37,6 +37,12 @@ The core goal: **make installation dead simple**. Download the installer, double
    ```
 3. Type `gclaude` to start
 
+## Screenshots
+
+| Installation | Install Success | Startup |
+|:---:|:---:|:---:|
+| ![Installation](assets/install_img1.png) | ![Install Success](assets/image_img2.png) | ![Startup](assets/image_img3.png) |
+
 ## Model Providers
 
 Five providers supported out of the box:

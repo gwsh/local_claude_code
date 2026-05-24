@@ -37,6 +37,12 @@
    ```
 3. 输入 `gclaude` 启动
 
+## 示例截图
+
+| 安装 | 安装成功 | 启动 |
+|:---:|:---:|:---:|
+| ![安装](assets/install_img1.png) | ![安装成功](assets/image_img2.png) | ![启动](assets/image_img3.png) |
+
 ## 模型提供商
 
 内置支持以下五种模型提供商：
