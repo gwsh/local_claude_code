@@ -1,5 +1,7 @@
 # Local Claude Code
 
+> English | [中文](README_CN.md)
+
 A desktop-installable build based on [free-code](https://github.com/paoloanzn/free-code) and [Claude Code](https://github.com/anthropics/claude-code). Provides one-click installers for Windows, macOS, and Linux — no terminal setup, no manual dependency hunting.
 
 ## Origin
