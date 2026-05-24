@@ -231,31 +231,19 @@ export function getDefaultMainLoopModel(): ModelName {
  */
 export function firstPartyNameToCanonical(name: ModelName): ModelShortName {
   name = name.toLowerCase()
-  // Special cases for Claude 4+ models to differentiate versions
-  // Order matters: check more specific versions first (4-5 before 4)
-  if (name.includes('claude-opus-4-6')) {
-    return 'claude-opus-4-6'
-  }
-  if (name.includes('claude-opus-4-5')) {
-    return 'claude-opus-4-5'
-  }
-  if (name.includes('claude-opus-4-1')) {
-    return 'claude-opus-4-1'
-  }
-  if (name.includes('claude-opus-4')) {
-    return 'claude-opus-4'
-  }
-  if (name.includes('claude-sonnet-4-6')) {
-    return 'claude-sonnet-4-6'
-  }
-  if (name.includes('claude-sonnet-4-5')) {
-    return 'claude-sonnet-4-5'
-  }
-  if (name.includes('claude-sonnet-4')) {
-    return 'claude-sonnet-4'
-  }
-  if (name.includes('claude-haiku-4-5')) {
-    return 'claude-haiku-4-5'
+  // Claude 4+ models use naming claude-{family}-{major}[-{minor}][-{date}].
+  // Capture minor only when it is 1-2 digits NOT followed by another digit, so
+  // 8-digit launch dates (e.g. claude-opus-4-20250514 → 4.0) don't get
+  // misinterpreted as a minor version. Future minors like 4-7, 4-15 are
+  // captured automatically without needing a new branch here.
+  const claude4Match = name.match(
+    /claude-(opus|sonnet|haiku)-(\d+)(?:-(\d{1,2})(?!\d))?/,
+  )
+  if (claude4Match) {
+    const [, family, major, minor] = claude4Match
+    return minor
+      ? `claude-${family}-${major}-${minor}`
+      : `claude-${family}-${major}`
   }
   // Claude 3.x models use a different naming scheme (claude-3-{family})
   if (name.includes('claude-3-7-sonnet')) {
@@ -423,8 +411,29 @@ export function getPublicModelDisplayName(model: ModelName): string | null {
     case getModelStrings().gpt54mini:
       return 'GPT-5.4 Mini'
     default:
-      return null
+      break
   }
+
+  // Pattern-based fallback for any Claude 4+ model not enumerated above.
+  // This is what makes display names work for future versions (e.g. 4.7, 4.8)
+  // without requiring an entry in ALL_MODEL_CONFIGS first. Mirrors the parsing
+  // in getMarketingNameForModel — keep them in sync.
+  const normalized = model.toLowerCase()
+  const has1m = normalized.includes('[1m]')
+  const canonical = getCanonicalName(model)
+  const claude4Match = canonical.match(
+    /^claude-(opus|sonnet|haiku)-(\d+)(?:-(\d{1,2}))?$/,
+  )
+  if (claude4Match) {
+    const [, family, major, minor] = claude4Match
+    const familyName = family.charAt(0).toUpperCase() + family.slice(1)
+    const version = minor ? `${major}.${minor}` : major
+    if (has1m && family !== 'haiku') {
+      return `${familyName} ${version} (1M context)`
+    }
+    return `${familyName} ${version}`
+  }
+  return null
 }
 
 function maskModelCodename(baseName: string): string {
@@ -623,35 +632,26 @@ export function getMarketingNameForModel(modelId: string): string | undefined {
   const has1m = modelId.toLowerCase().includes('[1m]')
   const canonical = getCanonicalName(modelId)
 
-  if (canonical.includes('claude-opus-4-6')) {
-    return has1m ? 'Opus 4.6 (with 1M context)' : 'Opus 4.6'
-  }
-  if (canonical.includes('claude-opus-4-5')) {
-    return 'Opus 4.5'
-  }
-  if (canonical.includes('claude-opus-4-1')) {
-    return 'Opus 4.1'
-  }
-  if (canonical.includes('claude-opus-4')) {
-    return 'Opus 4'
-  }
-  if (canonical.includes('claude-sonnet-4-6')) {
-    return has1m ? 'Sonnet 4.6 (with 1M context)' : 'Sonnet 4.6'
-  }
-  if (canonical.includes('claude-sonnet-4-5')) {
-    return has1m ? 'Sonnet 4.5 (with 1M context)' : 'Sonnet 4.5'
-  }
-  if (canonical.includes('claude-sonnet-4')) {
-    return has1m ? 'Sonnet 4 (with 1M context)' : 'Sonnet 4'
+  // Claude 4+ (new naming): claude-{opus|sonnet|haiku}-{major}[-{minor}]
+  // Pattern-based so any minor version (4.6, 4.7, 4.15, ...) is named correctly
+  // without code changes. Haiku doesn't have a 1M context variant.
+  const claude4Match = canonical.match(
+    /^claude-(opus|sonnet|haiku)-(\d+)(?:-(\d{1,2}))?$/,
+  )
+  if (claude4Match) {
+    const [, family, major, minor] = claude4Match
+    const familyName = family.charAt(0).toUpperCase() + family.slice(1)
+    const version = minor ? `${major}.${minor}` : major
+    const supports1m = family !== 'haiku'
+    return has1m && supports1m
+      ? `${familyName} ${version} (with 1M context)`
+      : `${familyName} ${version}`
   }
   if (canonical.includes('claude-3-7-sonnet')) {
     return 'Claude 3.7 Sonnet'
   }
   if (canonical.includes('claude-3-5-sonnet')) {
     return 'Claude 3.5 Sonnet'
-  }
-  if (canonical.includes('claude-haiku-4-5')) {
-    return 'Haiku 4.5'
   }
   if (canonical.includes('claude-3-5-haiku')) {
     return 'Claude 3.5 Haiku'

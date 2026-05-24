@@ -125,8 +125,9 @@ function getCustomOpusOption(): ModelOption | undefined {
 
 /**
  * Generate historical model options from a version-ordered key list.
- * The last key in the list is treated as "current" (excluded).
- * The second-to-last is tagged "Previous version", earlier ones "Legacy".
+ * Shows only the immediately previous version (current + previous = last 2);
+ * the current is shown elsewhere in the picker, so we only emit one entry
+ * tagged "Previous version".
  *
  * Historical options always use specific model IDs (not aliases) so users
  * pin to a particular version rather than following the latest default.
@@ -134,25 +135,22 @@ function getCustomOpusOption(): ModelOption | undefined {
 function getHistoricalModelOptions(familyKeys: ModelKey[]): ModelOption[] {
   if (familyKeys.length <= 1) return []
 
-  // Take up to 3 most recent entries, exclude the current (last)
-  const recent = familyKeys.slice(-3)
-  const historical = recent.slice(0, -1)
+  // Only the second-to-last entry (one previous to current)
+  const previousKey = familyKeys[familyKeys.length - 2]
+  if (!previousKey) return []
 
-  return historical.map((key, index) => {
-    const modelId = getModelStrings()[key]
-    const marketingName = getMarketingNameForModel(modelId)
-    const label = marketingName ?? key // e.g. "Opus 4.5" or fall back to key
-    // Most recent historical = "Previous version", earlier = "Legacy"
-    const isPrevious = index === historical.length - 1
-    const tier = isPrevious ? 'Previous version' : 'Legacy'
+  const modelId = getModelStrings()[previousKey]
+  const marketingName = getMarketingNameForModel(modelId)
+  const label = marketingName ?? previousKey
 
-    return {
+  return [
+    {
       value: modelId,
       label,
-      description: `${label} · ${tier}`,
-      descriptionForModel: `${label} - ${tier.toLowerCase()}`,
-    }
-  })
+      description: `${label} · Previous version`,
+      descriptionForModel: `${label} - previous version`,
+    },
+  ]
 }
 
 function getOpus46Option(fastMode = false): ModelOption {
