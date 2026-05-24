@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Check upstream repos for new updates
-# Usage: bash scripts/check-upstream.sh
+# Check upstream official Claude Code repo for bug fixes
+# Usage: bash scripts/check-upstream.sh [time-range]
+#        bash scripts/check-upstream.sh "3 days ago"
 
 set -euo pipefail
 
@@ -8,99 +9,79 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 ORIGIN_BRANCH="main"
 SINCE=${1:-"1 week ago"}
 
 echo -e "${CYAN}========================================${NC}"
-echo -e "${CYAN}  Upstream Update Check${NC}"
+echo -e "${CYAN}  Upstream Bug-Fix Check${NC}"
+echo -e "${CYAN}  Repo: anthropics/claude-code${NC}"
 echo -e "${CYAN}  Since: ${SINCE}${NC}"
 echo -e "${CYAN}========================================${NC}"
 echo ""
 
-# ---- Fetch upstreams ----
-echo -e "${YELLOW}[1/4] Fetching upstream remotes...${NC}"
+# ---- Fetch ----
+echo -e "${YELLOW}[1/4] Fetching upstream...${NC}"
 git fetch upstream-code 2>/dev/null && echo "  ✓ upstream-code (anthropics/claude-code)" || echo "  ✗ upstream-code fetch failed"
-git fetch upstream-free 2>/dev/null && echo "  ✓ upstream-free (paoloanzn/free-code)" || echo "  ✗ upstream-free fetch failed"
 echo ""
 
-# ---- New commits from each upstream ----
-echo -e "${YELLOW}[2/4] New commits since '${SINCE}'...${NC}"
+# ---- Bug-fix commits ----
+echo -e "${YELLOW}[2/4] Bug-fix commits since '${SINCE}'...${NC}"
 
-check_commits() {
-  local remote=$1
-  local label=$2
-  local branch="${remote}/${ORIGIN_BRANCH}"
+BRANCH="upstream-code/${ORIGIN_BRANCH}"
 
-  if ! git rev-parse --verify "${branch}" >/dev/null 2>&1; then
-    echo -e "  ${RED}✗ ${label}: branch '${branch}' not found${NC}"
-    return
+if ! git rev-parse --verify "${BRANCH}" >/dev/null 2>&1; then
+  echo -e "  ${RED}✗ Branch '${BRANCH}' not found${NC}"
+  exit 1
+fi
+
+# Filter fix/bug/revert/security commits
+FIXES=$(git log --oneline --no-decorate "${BRANCH}" --since="${SINCE}" --grep="fix\|bug\|revert\|crash\|OOM\|memory\|leak\|security\|vulnerability\|CVE" -i 2>/dev/null || echo "")
+FIX_COUNT=$(echo "$FIXES" | grep -c . || echo 0)
+
+if [ "$FIX_COUNT" -gt 0 ] && [ -n "$FIXES" ]; then
+  echo -e "  ${GREEN}${FIX_COUNT} bug-fix commit(s):${NC}"
+  echo "$FIXES" | head -30 | while read -r line; do
+    echo "    ${line}"
+  done
+  if [ "$FIX_COUNT" -gt 30 ]; then
+    echo "    ... and $((FIX_COUNT - 30)) more"
   fi
-
-  local count
-  count=$(git log --oneline "${branch}" --since="${SINCE}" 2>/dev/null | wc -l)
-  if [ "$count" -gt 0 ]; then
-    echo -e "  ${GREEN}${label}: ${count} new commit(s)${NC}"
-    git log --oneline --no-decorate "${branch}" --since="${SINCE}" | head -20 | while read -r line; do
-      echo "    ${line}"
-    done
-    if [ "$count" -gt 20 ]; then
-      echo "    ... and $((count - 20)) more"
-    fi
-  else
-    echo -e "  ${GREEN}${label}: no new commits${NC}"
-  fi
-  echo ""
-}
-
-check_commits "upstream-code" "anthropics/claude-code"
-check_commits "upstream-free" "paoloanzn/free-code"
-
-# ---- Latest releases via gh CLI ----
-echo -e "${YELLOW}[3/4] Latest GitHub Releases...${NC}"
-
-check_release() {
-  local repo=$1
-  local tag
-  tag=$(gh release view --repo "${repo}" --json tagName --jq '.tagName' 2>/dev/null || echo "N/A")
-  local date
-  date=$(gh release view --repo "${repo}" --json publishedAt --jq '.publishedAt' 2>/dev/null || echo "N/A")
-  echo -e "  ${repo}: ${GREEN}${tag}${NC} (${date})"
-}
-
-check_release "anthropics/claude-code"
-check_release "paoloanzn/free-code"
+else
+  echo -e "  ${GREEN}No bug-fix commits${NC}"
+fi
 echo ""
 
-# ---- Diff stats between origin and upstreams ----
-echo -e "${YELLOW}[4/4] How far behind is origin/${ORIGIN_BRANCH}?${NC}"
+# ---- All recent commits (for context) ----
+echo -e "${YELLOW}[3/4] All recent commits (for context)...${NC}"
 
-compare_branches() {
-  local upstream=$1
-  local label=$2
-  local up_branch="${upstream}/${ORIGIN_BRANCH}"
-
-  if ! git rev-parse --verify "${up_branch}" >/dev/null 2>&1; then
-    echo -e "  ${RED}✗ ${label}: can't compare${NC}"
-    return
+ALL_COUNT=$(git log --oneline "${BRANCH}" --since="${SINCE}" 2>/dev/null | wc -l)
+if [ "$ALL_COUNT" -gt 0 ]; then
+  echo -e "  ${GREEN}${ALL_COUNT} total commit(s):${NC}"
+  git log --oneline --no-decorate "${BRANCH}" --since="${SINCE}" | head -20 | while read -r line; do
+    echo "    ${line}"
+  done
+  if [ "$ALL_COUNT" -gt 20 ]; then
+    echo "    ... and $((ALL_COUNT - 20)) more"
   fi
+else
+  echo -e "  No new commits"
+fi
+echo ""
 
-  local behind
-  behind=$(git rev-list --count "origin/${ORIGIN_BRANCH}..${up_branch}" 2>/dev/null || echo "?")
-  local ahead
-  ahead=$(git rev-list --count "${up_branch}..origin/${ORIGIN_BRANCH}" 2>/dev/null || echo "?")
+# ---- Behind/ahead ----
+echo -e "${YELLOW}[4/4] Sync status vs origin/${ORIGIN_BRANCH}...${NC}"
 
-  echo -e "  ${label}:"
-  echo -e "    Behind upstream: ${RED}${behind}${NC} commits"
-  echo -e "    Ahead of upstream: ${GREEN}${ahead}${NC} commits"
-}
+UP_BRANCH="${BRANCH}"
+behind=$(git rev-list --count "origin/${ORIGIN_BRANCH}..${UP_BRANCH}" 2>/dev/null || echo "?")
+ahead=$(git rev-list --count "${UP_BRANCH}..origin/${ORIGIN_BRANCH}" 2>/dev/null || echo "?")
 
-compare_branches "upstream-code" "anthropics/claude-code"
-compare_branches "upstream-free" "paoloanzn/free-code"
+echo -e "  Behind upstream: ${RED}${behind}${NC} commits"
+echo -e "  Ahead of upstream: ${GREEN}${ahead}${NC} commits"
 
 echo ""
 echo -e "${CYAN}========================================${NC}"
 echo -e "${CYAN}  Done.${NC}"
-echo -e "${CYAN}  To merge: git merge upstream-free/main${NC}"
+echo -e "${CYAN}  Inspect: git log origin/main..upstream-code/main${NC}"
 echo -e "${CYAN}========================================${NC}"

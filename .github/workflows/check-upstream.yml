@@ -1,4 +1,4 @@
-name: Check Upstream Updates
+name: Check Upstream Bug Fixes
 
 on:
   schedule:
@@ -17,71 +17,67 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Fetch upstream repositories
+      - name: Fetch upstream Claude Code
         run: |
           git remote add upstream-code https://github.com/anthropics/claude-code.git || true
-          git remote add upstream-free https://github.com/paoloanzn/free-code.git || true
           git fetch upstream-code 2>/dev/null || echo "upstream-code fetch failed"
-          git fetch upstream-free 2>/dev/null || echo "upstream-free fetch failed"
 
-      - name: Check for new commits and create issue
+      - name: Check for bug-fix commits and create issue
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Check commits from the last 2 days (overlap to avoid missing due to timing)
           SINCE="2 days ago"
+          REPO="anthropics/claude-code"
+          BRANCH="upstream-code/main"
 
-          check_upstream() {
-            local REMOTE=$1
-            local REPO=$2
-            local BRANCH="${REMOTE}/main"
+          if ! git rev-parse --verify "${BRANCH}" >/dev/null 2>&1; then
+            echo "${REPO}: branch not found, skipping"
+            exit 0
+          fi
 
-            if ! git rev-parse --verify "${BRANCH}" >/dev/null 2>&1; then
-              echo "${REPO}: branch not found, skipping"
-              return
-            fi
+          # Filter for bug-fix, security, crash-related commits only
+          FIXES=$(git log --oneline "${BRANCH}" --since="${SINCE}" \
+            --grep="fix\|bug\|revert\|crash\|OOM\|memory\|leak\|security\|vulnerability\|CVE" -i 2>/dev/null || echo "")
 
-            COMMITS=$(git log --oneline "${BRANCH}" --since="${SINCE}" 2>/dev/null || echo "")
-            COUNT=$(echo "$COMMITS" | grep -c . || echo 0)
+          ALL_COMMITS=$(git log --oneline "${BRANCH}" --since="${SINCE}" 2>/dev/null || echo "")
+          FIX_COUNT=$(echo "$FIXES" | grep -c . || echo 0)
+          ALL_COUNT=$(echo "$ALL_COMMITS" | grep -c . || echo 0)
 
-            if [ "$COUNT" -gt 0 ] && [ -n "$COMMITS" ]; then
-              echo "Found ${COUNT} new commit(s) from ${REPO}"
+          if [ "$FIX_COUNT" -eq 0 ]; then
+            echo "No bug-fix commits since ${SINCE}"
+            exit 0
+          fi
 
-              BODY="## Upstream updates detected: [${REPO}](https://github.com/${REPO})
+          echo "Found ${FIX_COUNT} bug-fix commit(s) out of ${ALL_COUNT} total"
 
-          **${COUNT} new commit(s)** since ${SINCE}:
+          BODY="## Upstream bug-fix commits detected: [${REPO}](https://github.com/${REPO})
+
+          **${FIX_COUNT} bug-fix commit(s)** since ${SINCE} (${ALL_COUNT} total commits):
 
           \`\`\`
-          ${COMMITS}
+          ${FIXES}
           \`\`\`
 
           **Compare:** https://github.com/${REPO}/commits/main
 
           > Automated check via \`.github/workflows/check-upstream.yml\`"
 
-              # Check if a similar issue already exists
-              EXISTING=$(gh issue list --repo "$GITHUB_REPOSITORY" \
-                --search "Upstream update: ${REPO}" \
-                --state open \
-                --json number \
-                --jq '.[0].number' 2>/dev/null || echo "")
+          # Check if a similar issue already exists
+          EXISTING=$(gh issue list --repo "$GITHUB_REPOSITORY" \
+            --search "Upstream bug-fix: ${REPO}" \
+            --state open \
+            --json number \
+            --jq '.[0].number' 2>/dev/null || echo "")
 
-              if [ -n "$EXISTING" ]; then
-                echo "Issue #${EXISTING} already open, adding comment..."
-                gh issue comment "$EXISTING" --repo "$GITHUB_REPOSITORY" \
-                  --body "Still behind ${REPO}. Latest commits:\n\n\`\`\`\n${COMMITS}\n\`\`\`"
-              else
-                TITLE="Upstream update: ${REPO} — ${COUNT} new commit(s)"
-                gh issue create --repo "$GITHUB_REPOSITORY" \
-                  --title "$TITLE" \
-                  --body "$BODY" \
-                  --label "upstream"
-                echo "Issue created."
-              fi
-            else
-              echo "${REPO}: no new commits since ${SINCE}"
-            fi
-          }
-
-          check_upstream "upstream-code" "anthropics/claude-code"
-          check_upstream "upstream-free" "paoloanzn/free-code"
+          if [ -n "$EXISTING" ]; then
+            echo "Issue #${EXISTING} already open, adding comment..."
+            gh issue comment "$EXISTING" --repo "$GITHUB_REPOSITORY" \
+              --body "Still behind ${REPO}. Latest bug-fix commits:\n\n\`\`\`\n${FIXES}\n\`\`\`"
+          else
+            TITLE="Upstream bug-fix: ${REPO} — ${FIX_COUNT} fix(es)"
+            gh issue create --repo "$GITHUB_REPOSITORY" \
+              --title "$TITLE" \
+              --body "$BODY" \
+              --label "upstream"
+            echo "Issue created."
+          fi
