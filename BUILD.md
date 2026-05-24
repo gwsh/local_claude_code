@@ -1,54 +1,62 @@
-# GWSH Claude Code — 打包指南
+# GWSH Claude Code — Build & Packaging
 
-## 环境准备
-
-| 工具 | 用途 | 安装 |
-|------|------|------|
-| **Bun** 1.2+ | 编译二进制 | `npm install -g bun` |
-| **NSIS 3.x** | 构建 Windows 安装器 | `winget install NSIS.NSIS` |
-| **rcedit** | 向 exe 注入图标 | `npm install`（已在项目依赖中） |
-| **sharp + to-ico** | PNG → ICO 图标转换（保留透明通道） | `npm install sharp to-ico` |
-
----
-
-## 一键打包
+## Quick Start
 
 ```bash
-# 1. 生成透明 ICO 图标
-node -e "
-const sharp=require('sharp'),fs=require('fs'),toIco=require('to-ico');
-sharp('png/logo.png').resize(256,256).ensureAlpha().png().toBuffer()
-  .then(b=>toIco(b)).then(b=>fs.writeFileSync('png/logo.ico',b))
-"
+# Install dependencies
+bun install
 
-# 2. 编译 + 注入图标
-npx bun run ./scripts/build.ts --dev --feature-set=dev-full --outname=gclaude
-cp gclaude-dev.exe dist/gclaude.exe
-./node_modules/rcedit/bin/rcedit.exe dist/gclaude.exe --set-icon png/logo.ico
+# Build + Package (default, produces installer for current OS)
+bun run build
 
-# 3. 构建安装器 (PowerShell)
-& "C:\Program Files (x86)\NSIS\makensis.exe" scripts/installer/windows.nsi
+# Build binary only (no packaging)
+bun run compile
+
+# Dev build (no packaging)
+bun run build:dev
+
+# Dev build with all experimental features
+bun run build:dev:full
 ```
 
-产物：**`dist/installer/gwsh-code-setup.exe`**（~195 MB，安装秒级完成）
+## What You Get
 
----
+Running `bun run build` produces:
 
-## 安装器特性
+| Platform | Output | Install Method |
+|----------|--------|---------------|
+| **Windows** | `dist/installer/gwsh-code-setup-{version}.exe` | Double-click, follow wizard |
+| **macOS** | `dist/installer/gwsh-code-{version}.pkg` | Double-click, or `sudo installer -pkg ... -target /` |
+| **Linux** | `dist/installer/gwsh-code-{version}-linux-x64.tar.gz` | Extract, `sudo bash install.sh` |
 
-- 安装后点 "Run gclaude now" 会自动检测终端：
-  - Windows 11 → 用 **Windows Terminal** 打开
-  - 无 WT → 用 **PowerShell** 打开
-- 大文件不压缩，直接拷贝，安装瞬间完成
-- 自动配置 PATH、开始菜单快捷方式、控制面板卸载
+## Script Reference
 
----
+| Command | What it does |
+|---------|-------------|
+| `bun run build` | Compile + package into OS installer (production) |
+| `bun run compile` | Compile binary only, output to `dist/cli` |
+| `bun run build:dev` | Dev build to `./cli-dev` (fast, no packaging) |
+| `bun run build:dev:full` | Dev build with all 50 experimental features |
+| `bun run package` | Re-package an existing `dist/cli` binary into installer |
 
-## 产物结构
+## Advanced
+
+### CLI flags for `scripts/build.ts`
 
 ```
-dist/
-├── gclaude.exe                  ← 裸二进制（打包中间文件，不分发）
-└── installer/
-    └── gwsh-code-setup.exe      ← 唯一发布产物
+--dev                  Dev build with debug version stamp
+--compile              Output to dist/ instead of root
+--no-package           Skip installer packaging (binary only)
+--package-only         Skip build, re-package existing binary
+--feature-set=dev-full Enable all 50 experimental features
+--feature=FLAG         Enable a single feature flag
+--outname=NAME         Custom output binary name
 ```
+
+### Environment Requirements for Packaging
+
+**Windows**: [NSIS 3.x](https://nsis.sourceforge.io/) (`winget install NSIS.NSIS`)  
+**macOS**: Xcode Command Line Tools (for `pkgbuild`)  
+**Linux**: `tar` (built-in)
+
+If packaging tools are missing, the script prints a warning and leaves the raw binary.

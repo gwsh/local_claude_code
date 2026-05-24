@@ -3,4 +3,7 @@ dist/
 dist/*
 cli
 cli-dev
+gclaude
+gclaude-dev
+*.exe
 openclaw/

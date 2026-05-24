@@ -8,23 +8,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Install dependencies
 bun install
 
-# Standard build (./cli)
+# Standard build (./dist/gclaude)
 bun run build
 
-# Dev build (./cli-dev)
+# Dev build (./gclaude-dev)
 bun run build:dev
 
-# Dev build with all experimental features (./cli-dev)
+# Dev build with all experimental features (./gclaude-dev)
 bun run build:dev:full
 
-# Compiled build (./dist/cli)
+# Compiled build (./dist/gclaude)
 bun run compile
 
 # Run from source without compiling
 bun run dev
 ```
 
-Run the built binary with `./cli` or `./cli-dev`. Set `ANTHROPIC_API_KEY` in the environment or use OAuth via `./cli /login`.
+Run the built binary with `./gclaude` or `./gclaude-dev`. Set `ANTHROPIC_API_KEY` in the environment or use OAuth via `./cli /login`.
 
 ## High-level architecture
 

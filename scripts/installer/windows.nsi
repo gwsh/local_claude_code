@@ -2,13 +2,18 @@
 ; Professional NSIS 3.x script with dependency detection
 
 !define PRODUCT_NAME "GWSH Claude Code"
-!define PRODUCT_VERSION "1.0.0"
+!ifndef PRODUCT_VERSION
+  !define PRODUCT_VERSION "1.0.0"
+!endif
 !define PRODUCT_PUBLISHER "gwsh"
 !define PRODUCT_DIR_REGKEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\gwshClaude"
 !define EXE_NAME "gclaude.exe"
 
 Name "${PRODUCT_NAME} ${PRODUCT_VERSION}"
-OutFile "..\..\dist\installer\gwsh-code-setup.exe"
+!ifndef OUTFILE
+  !define OUTFILE "..\..\dist\installer\gwsh-code-setup.exe"
+!endif
+OutFile "${OUTFILE}"
 RequestExecutionLevel user
 InstallDir "$LOCALAPPDATA\Programs\gwshClaude"
 SetCompressor lzma
