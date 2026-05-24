@@ -49,6 +49,14 @@ export function isNonCustomOpusModel(model: ModelName): boolean {
   )
 }
 
+export function isNonCustomSonnetModel(model: ModelName): boolean {
+  return (
+    model === getModelStrings().sonnet40 ||
+    model === getModelStrings().sonnet45 ||
+    model === getModelStrings().sonnet46
+  )
+}
+
 /**
  * Helper to get the model from /model (including via /config), the --model flag, environment variable,
  * or the saved settings. The returned value can be a model alias if that's what the user specified.

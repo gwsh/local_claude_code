@@ -6,6 +6,7 @@ import {
   isMaxSubscriber,
   isTeamPremiumSubscriber,
 } from '../auth.js'
+import { OPUS_VERSION_KEYS, SONNET_VERSION_KEYS, HAIKU_VERSION_KEYS, type ModelKey } from './configs.js'
 import { getModelStrings } from './modelStrings.js'
 import {
   COST_TIER_3_15,
@@ -122,13 +123,36 @@ function getCustomOpusOption(): ModelOption | undefined {
   }
 }
 
-function getOpus41Option(): ModelOption {
-  return {
-    value: 'opus',
-    label: 'Opus 4.1',
-    description: `Opus 4.1 · Legacy`,
-    descriptionForModel: 'Opus 4.1 - legacy version',
-  }
+/**
+ * Generate historical model options from a version-ordered key list.
+ * The last key in the list is treated as "current" (excluded).
+ * The second-to-last is tagged "Previous version", earlier ones "Legacy".
+ *
+ * Historical options always use specific model IDs (not aliases) so users
+ * pin to a particular version rather than following the latest default.
+ */
+function getHistoricalModelOptions(familyKeys: ModelKey[]): ModelOption[] {
+  if (familyKeys.length <= 1) return []
+
+  // Take up to 3 most recent entries, exclude the current (last)
+  const recent = familyKeys.slice(-3)
+  const historical = recent.slice(0, -1)
+
+  return historical.map((key, index) => {
+    const modelId = getModelStrings()[key]
+    const marketingName = getMarketingNameForModel(modelId)
+    const label = marketingName ?? key // e.g. "Opus 4.5" or fall back to key
+    // Most recent historical = "Previous version", earlier = "Legacy"
+    const isPrevious = index === historical.length - 1
+    const tier = isPrevious ? 'Previous version' : 'Legacy'
+
+    return {
+      value: modelId,
+      label,
+      description: `${label} · ${tier}`,
+      descriptionForModel: `${label} - ${tier.toLowerCase()}`,
+    }
+  })
 }
 
 function getOpus46Option(fastMode = false): ModelOption {
@@ -313,6 +337,10 @@ function getModelOptionsBase(fastMode = false): ModelOption[] {
       getSonnet46Option(),
       getSonnet46_1MOption(),
       getHaiku45Option(),
+      // Historical versions (auto-generated from version key lists)
+      ...getHistoricalModelOptions(OPUS_VERSION_KEYS),
+      ...getHistoricalModelOptions(SONNET_VERSION_KEYS),
+      ...getHistoricalModelOptions(HAIKU_VERSION_KEYS),
     ]
   }
 
@@ -340,6 +368,12 @@ function getModelOptionsBase(fastMode = false): ModelOption[] {
       }
 
       premiumOptions.push(MaxHaiku45Option)
+
+      // Historical versions (auto-generated from version key lists)
+      premiumOptions.push(...getHistoricalModelOptions(OPUS_VERSION_KEYS))
+      premiumOptions.push(...getHistoricalModelOptions(SONNET_VERSION_KEYS))
+      premiumOptions.push(...getHistoricalModelOptions(HAIKU_VERSION_KEYS))
+
       return premiumOptions
     }
 
@@ -359,6 +393,12 @@ function getModelOptionsBase(fastMode = false): ModelOption[] {
     }
 
     standardOptions.push(MaxHaiku45Option)
+
+    // Historical versions (auto-generated from version key lists)
+    standardOptions.push(...getHistoricalModelOptions(SONNET_VERSION_KEYS))
+    standardOptions.push(...getHistoricalModelOptions(OPUS_VERSION_KEYS))
+    standardOptions.push(...getHistoricalModelOptions(HAIKU_VERSION_KEYS))
+
     return standardOptions
   }
 
@@ -377,10 +417,16 @@ function getModelOptionsBase(fastMode = false): ModelOption[] {
       }
     }
     payg1POptions.push(getHaiku45Option())
+
+    // Historical versions (auto-generated from version key lists)
+    payg1POptions.push(...getHistoricalModelOptions(SONNET_VERSION_KEYS))
+    payg1POptions.push(...getHistoricalModelOptions(OPUS_VERSION_KEYS))
+    payg1POptions.push(...getHistoricalModelOptions(HAIKU_VERSION_KEYS))
+
     return payg1POptions
   }
 
-  // PAYG 3P: Default (Sonnet 4.5) + Sonnet (3P custom) or Sonnet 4.6/1M + Opus (3P custom) or Opus 4.1/Opus 4.6/Opus1M + Haiku + Opus 4.1
+  // PAYG 3P: Default (Sonnet 4.5) + Sonnet (3P custom) or Sonnet 4.6/1M + Opus (3P custom) or Opus 4.1/Opus 4.6/Opus1M + Haiku + historical versions
   const payg3pOptions = [getDefaultOptionForUser(fastMode)]
 
   const customSonnet = getCustomSonnetOption()
@@ -392,24 +438,29 @@ function getModelOptionsBase(fastMode = false): ModelOption[] {
     if (checkSonnet1mAccess()) {
       payg3pOptions.push(getSonnet46_1MOption())
     }
+    // Historical Sonnet versions (auto-generated from version key list)
+    payg3pOptions.push(...getHistoricalModelOptions(SONNET_VERSION_KEYS))
   }
 
   const customOpus = getCustomOpusOption()
   if (customOpus !== undefined) {
     payg3pOptions.push(customOpus)
   } else {
-    // Add Opus 4.1, Opus 4.6 and Opus 4.6 1M
-    payg3pOptions.push(getOpus41Option()) // This is the default opus
+    // Add Opus 4.6 and Opus 4.6 1M (historical versions auto-generated below)
     payg3pOptions.push(getOpus46Option(fastMode))
     if (checkOpus1mAccess()) {
       payg3pOptions.push(getOpus46_1MOption(fastMode))
     }
+    // Historical Opus versions (auto-generated from version key list)
+    payg3pOptions.push(...getHistoricalModelOptions(OPUS_VERSION_KEYS))
   }
   const customHaiku = getCustomHaikuOption()
   if (customHaiku !== undefined) {
     payg3pOptions.push(customHaiku)
   } else {
     payg3pOptions.push(getHaikuOption())
+    // Historical Haiku version (auto-generated from version key list)
+    payg3pOptions.push(...getHistoricalModelOptions(HAIKU_VERSION_KEYS))
   }
   return payg3pOptions
 }

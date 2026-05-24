@@ -140,6 +140,17 @@ export const ALL_MODEL_CONFIGS = {
 
 export type ModelKey = keyof typeof ALL_MODEL_CONFIGS
 
+/**
+ * Ordered version history per model family, oldest → newest.
+ * The last entry is treated as "current", the one before as "previous",
+ * and earlier ones as "legacy" in the model picker.
+ *
+ * @[MODEL LAUNCH]: Append the new model key to the appropriate family array.
+ */
+export const OPUS_VERSION_KEYS: ModelKey[] = ['opus40', 'opus41', 'opus45', 'opus46']
+export const SONNET_VERSION_KEYS: ModelKey[] = ['sonnet40', 'sonnet45', 'sonnet46']
+export const HAIKU_VERSION_KEYS: ModelKey[] = ['haiku35', 'haiku45']
+
 /** Union of all canonical first-party model IDs, e.g. 'claude-opus-4-6' | 'claude-sonnet-4-5-20250929' | … */
 export type CanonicalModelId =
   (typeof ALL_MODEL_CONFIGS)[ModelKey]['firstParty']
